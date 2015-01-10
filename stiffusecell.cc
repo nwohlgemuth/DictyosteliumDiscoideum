@@ -1,6 +1,8 @@
 /*************************************************************************************
       This code was initially written by Dr. John Dallon, Brigham Young University 
       
+ 
+	  This code was further modified by Nathan Wohlgemuth, Brigham Young University
 *************************************************************************************/
 
 /*************************Notes*******************************************************
@@ -29,25 +31,28 @@ and grams.
 // If the integrin length is 5 the back of the slug cannot stay attached 10 is better.
 
 
-
-#include "util.h" 
-//#include "/usr/include/architecture/ppc/math.h"
 #include <cmath>
-#include "cellclass.h"
 #include <fstream> 
-#include "randomc.h"
-#include "stocc.h"
-
 #include <sstream>
 
+//#include "util.h" // I cannot find this file anywhere (Jan 10, 2015)
+#include "cellclass.h"
+#include "randomc.h"
+#include "stocc.h"
 #include "/usr/local/include/cvode/cvode.h"
 #include "/usr/local/include/cvode/cvode_spgmr.h"
-//#include "/usr/local/include/kinsol/kinsol_spbcgs.h"  
-//#include "/usr/local/include/kinsol/kinsol_sptfqmr.h" 
 #include "/usr/local/include/nvector/nvector_serial.h" 
  
+namespace patch {
+    template <typename T> std::string to_string(const T& n) {
+        std::ostringstream stm;
+        stm << n;
+        return stm.str();
+    }
+}
+
 /* function declarations */
-void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *foutc);
+void initialize_cells(int ncx,int ncy, Cell *cell, ofstream& foutc);
 void localize_node_grid_update_all (Cell *cell);
 void   function_node(double u[], double savf[],int nn,Cell *cell); 
 int check_flag(void* flagvalue, char *funcname, int opt);
@@ -62,7 +67,7 @@ int Psolve(realtype t, N_Vector cc, N_Vector fval, N_Vector r, N_Vector z, realt
    // TRandomMersenne rg(1283);  
 // TRandomMersenne rg1(49495);
 //int seed = (unsigned int) time(NULL);
-int seed = 1283; 
+int seed = 3894;//1283; 
 CRandomMersenne rg1(seed);
 StochasticLib2 sto1(13948); 
 // TRandomMersenne rg1(seed); 
@@ -88,7 +93,7 @@ double average_substrate_stalk[2] = {20,20}; // 300000 average detach in sec tim
 
 double prob_attach_initial=.5; // probability that the initial state of the cadherin is bound
 double prob_attach_initial_int=.5; // probability that the initial state of the integrin is bound
-double prob_factor_back;// multiplied to prob_attach_substrate if in back l_2 for back
+//double prob_factor_back;// multiplied to prob_attach_substrate if in back l_2 for back
 double init[2]; 
 double velocity[2]; 
 double cadviscosityfactor;//multiplied to viscosity for cadherins
@@ -99,351 +104,371 @@ int number_cadherins_update;
 int integrins_update[totalint];
 int number_integrins_update;  
 
+double cad_averand = 0;
+double cad_avedir[2] = {0,0};
+double cad_numang = 0; 
+double int_averand = 0;
+double int_avedir[2] = {0,0};
+double int_numang = 0; 
+double avejindex[9] = {0,0,0,0,0,0,0,0,0};
 
-
-//september
 double cell_forces[2*cx*cy]; // the forces on each cell
-int main()
-{
 
-
-  //october
-  ofstream foutm;
-  	foutm.open("mass_centers.dat",ios::app);
-
-  double tstart = 0;
-  int ntime = int (tend/dt);
-  int flag;
-  int jindex[ncells];
-  int nnmax = 2*(ncells+totalcad);
-  ifstream fin; 
-    fin.open("cellmotion.dat"); // open file to read
-    fin>>basic_length_int;
-    fin>>basic_length_cad;
-    fin>>prob_factor_back;
-    fin>>seed; 
+int main() {
+	double tstart = 0;
+	int ntime = int (tend/dt);
+	int flag;
+	int jindex[ncells];
+	int nnmax = 2*(ncells+totalcad);
+	
+	ifstream fin; 
+	fin.open("cellmotion.dat"); // open file to read
+	if(fin.good()) {
+		fin >> basic_length_int;
+		fin >> basic_length_cad;
+		//fin >> prob_factor_back; was 5 not used anywhere in code
+		fin>>seed;
+	}
+	else {
+		cout << "cellmotion.dat not found" << endl;
+	}
     fin.close();
-    prob_factor_back =prob_factor_back*.1; 
+
+    //prob_factor_back = prob_factor_back*.1; 
   
     fin.open("params.dat");
-    fin >> average_spore;
-    fin >> average_stalk[1];
-    average_stalk[0] = average_stalk[1];
-    average_different = min(average_stalk[0],average_spore);
+	if(fin.good()) {
+		fin >> average_spore;
+		fin >> average_unbound_cad_spore;
+	}
+	else {
+		cout << "params.dat not found" << endl;
+	}
     fin.close();
   
+	ofstream foutm;
+	foutm.open("mass_centers.dat",ios::app);
+	foutm << average_spore << " " << average_unbound_cad_spore << " ";
 
-  foutm << average_spore << " " << average_stalk[1] << " ";
+	cout << "Running " << average_spore << "/" << average_unbound_cad_spore << "\n";
 
-  cout << "Running " << average_spore << "/" << average_stalk[1] << average_spore << "\n";
-
-  stringstream ss;
-  ss << "attach_ratios_" << average_spore << "_" << average_stalk[1] << ".dat";
-  ofstream *foutr = new ofstream(ss.str());
-
-  stringstream ss2;
-  ss2 << "force_output_" << average_spore << "_" << average_stalk[1] << ".dat";
-  ofstream *foutf = new ofstream(ss2.str());
+	ofstream foutr;
+	foutr.open(("attach_ratios_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
+		
+	ofstream foutf;
+	foutf.open(("force_output_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
   
-  stringstream ss3;
-  ss3 << "cell_output_" << average_spore << "_" << average_stalk[1] << ".dat";
-  ofstream *foutc = new ofstream(ss3.str());
+	ofstream foutc;
+	foutc.open(("cell_output_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
 
-  stringstream ss4;
-  ss4 << "cell_forces_" << average_spore << "_" << average_stalk[1] << ".dat";
-  ofstream *foutcf = new ofstream(ss4.str());
+	ofstream foutcf;
+	foutcf.open(("cell_forces_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
 
 
 	ifstream pin; 
 	pin.open("cadviscosityfactor.txt"); // open file to read
-	pin>>cadviscosityfactor; //cadherin viscosity factor
+	if(pin.good()) {
+		pin>>cadviscosityfactor; //cadherin viscosity factor
+	}
+	else {
+		cout << "cadviscosityfactor.txt not found" << endl;
+	}
 	pin.close();
 
-  //october was earlier on line 154
-  Cell * cell = new Cell[ncells]; // get memory for array of cells
-  initialize_cells(cx,cy,cell,&foutm); //was foutc
+	Cell * cell = new Cell[ncells]; // get memory for array of cells
+	initialize_cells(cx,cy,cell,foutm); //was foutc
 
 
-  // TRandomMersenne rg1(seed);
-  /* SETUP for the nonlinear solver CVODE */ 
-  void *cvode_mem;
+	//TRandomMersenne rg1(seed);
+	/* SETUP for the nonlinear solver CVODE */ 
+	void *cvode_mem;
 
-  cvode_mem = NULL;//is this where it needs to be set to the largest size of data we can get from caherins; check this if getting segmentation fault
-  N_Vector sc;
-  sc = N_VNew_Serial(nnmax);
-  N_VConst_Serial(1.,sc); 
-  /* Call KINCreate / KINMalloc to initialize KINSOL :
-  nvSpec is the nvSpec pointer used in the serial version
-  A pointer to KINSOL problem memory is returned and stored in cvode_mem . */
+	cvode_mem = NULL;//is this where it needs to be set to the largest size of data we can get from caherins; check this if getting segmentation fault
+	N_Vector sc;
+	sc = N_VNew_Serial(nnmax);
+	N_VConst_Serial(1.,sc); 
+	/* Call KINCreate / KINMalloc to initialize KINSOL :
+	 nvSpec is the nvSpec pointer used in the serial version
+	 A pointer to KINSOL problem memory is returned and stored in cvode_mem . */
 
-  cvode_mem = CVodeCreate(CV_BDF,CV_NEWTON);  // for stiff problems
-  // cvode_mem= CVodeCreate(CV_ADAMS,CV_FUNCTIONAL); // for non stiff problems
-  if ( check_flag (( void *) cvode_mem, " CVodeCreate ", 0)) return (1);
-  flag = CVodeInit(cvode_mem, move_nodes,tstart,sc);   
-  if ( check_flag (( void *) cvode_mem , " CVodeInit ", 0)) return (1);
-  int maxstep = 20000;
-  flag = CVodeSetMaxNumSteps(cvode_mem, maxstep);
-  if ( check_flag ( &flag , "CVodeSetMaxNumSteps", 1)) return(1) ;
+	cvode_mem = CVodeCreate(CV_BDF,CV_NEWTON);  // for stiff problems
+	// cvode_mem= CVodeCreate(CV_ADAMS,CV_FUNCTIONAL); // for non stiff problems
+	if ( check_flag (( void *) cvode_mem, " CVodeCreate ", 0)) return (1);
+	flag = CVodeInit(cvode_mem, move_nodes,tstart,sc);   
+	if ( check_flag (( void *) cvode_mem , " CVodeInit ", 0)) return (1);
+	int maxstep = 20000;
+	flag = CVodeSetMaxNumSteps(cvode_mem, maxstep);
+	if ( check_flag ( &flag , "CVodeSetMaxNumSteps", 1)) return(1) ;
 
-  localize_node_grid_update_all(cell);
-  for(int j = 0; j<ncells; j++){
-    int restart = cell[j].restart;
-    for(int i = 0; i<ncad; i++){
-      if(cell[j].get_cadherin_attach(i)==-1)
-		cell[j].update_cadherins_initial(dt,average_spore,average_stalk,average_different,restart, average_unbound_cad_spore,average_unbound_cad_stalk,i,j,cell);
-	  int lim=2;		  
-	  double vector[lim];//for cadherin vector
-	  cell[j].get_cadherin_vector(i, vector, lim);
-		
-	  if (abs(vector[0])<1) {
+	localize_node_grid_update_all(cell);
+	for(int j = 0; j<ncells; j++){
+		int restart = cell[j].restart;
+		for(int i = 0; i<ncad; i++){
+			if(cell[j].get_cadherin_attach(i)==-1) {
+				cell[j].update_cadherins_initial(dt,average_spore,average_stalk,average_different,restart, average_unbound_cad_spore,average_unbound_cad_stalk,i,j,cell);
+			}
+			int lim=2;		  
+			double vector[lim];//for cadherin vector
+			cell[j].get_cadherin_vector(i, vector, lim);
+	
+			if (abs(vector[0])<1) {
+			}
 		}
-    }
-  }
-  //initialize the integrins by deciding if they should bind to substrate
-  for(int j = 0; j<ncells; j++){
-    //check to see if the cell is close enough to the substrate
-    double center[2];			       
-    cell[j].get_center(center,2);
-    int restart = cell[j].restart;
-    if(center[1]<7){// 5 is the unstretched integrin length the substrate is at y=0 so if the cell center is 7+5 it is close enough to attach; 
-      for(int i = 0; i<nint; i++){
-		cell[j].update_integrins_initial(dt,average_substrate_spore,average_substrate_stalk, restart,average_unbound_int_spore, average_unbound_int_stalk,i,j,cell);
-      }
-    }
-  }
+	}
+	//initialize the integrins by deciding if they should bind to substrate
+	for(int j = 0; j<ncells; j++){
+		//check to see if the cell is close enough to the substrate
+		double center[2];			       
+		cell[j].get_center(center,2);
+		int restart = cell[j].restart;
+		if(center[1] < 7){// 5 is the unstretched integrin length the substrate is at y=0 so if the cell center is 7+5 it is close enough to attach; 
+			for(int i = 0; i<nint; i++){
+				cell[j].update_integrins_initial(dt,average_substrate_spore,average_substrate_stalk, restart,average_unbound_int_spore, average_unbound_int_stalk,i,j,cell);
+			}
+		}
+	}
   
-  // Output some preliminary stuff (just the number of cells)
-  *foutc<<ncells<<"\n";
-  *foutc<<ncad<<"\n";
-  *foutc<<nint<<"\n";
-  // output at time t = 0
-  for( int j = 0; j<ncells; j++){
-    cell[j].print_output(foutc,0,dt);
-  }
-  cout<<"Time = "<<0*dt<<"\n";
+	// Output some preliminary stuff (just the number of cells)
+	foutc << ncells << "\n";
+	foutc << ncad << "\n";
+	foutc << nint << "\n";
+	// output at time t = 0
+	for(int j = 0; j<ncells; j++) {
+		cell[j].print_output(foutc,0,dt);
+	}
+	cout << "Time = " << 0*dt << "\n";
 
 
-  // move the cell
-  double prob;
-  for ( int it = 0; it <= ntime; it++){
-  	int cadattach = 0;
-  	int intattach =0;
-    double t = (it+1)*dt;
-    number_cadherins_update = 0;
-    number_integrins_update = 0;
+	// move the cell
+	double prob;
+	for(int it = 0; it <= ntime; it++) {
+		int cadattach = 0;
+		int intattach =0;
+		double t = (it+1)*dt;
+		number_cadherins_update = 0;
+		number_integrins_update = 0;
 
-    for(int j = 0; j<ncells; j++){    
-	    // initialize array
-	    for(int i = 0; i<ncad; i++){  
-		    cadherins_update[j*ncad+i] = 0;
-	    }
-	    for(int i = 0; i<nint; i++){  
-		    integrins_update[j*nint+i] = 0;
-	    } 
-    }
+		for(int j = 0; j<ncells; j++) {    
+			// initialize array
+			for(int i = 0; i<ncad; i++) {  
+				cadherins_update[j*ncad+i] = 0;
+			}
+			for(int i = 0; i<nint; i++) {  
+				integrins_update[j*nint+i] = 0;
+			} 
+		}
 
-    //loop through cells and determine if cadherins and integrins should release or not
-	
-    
-    for (int ii =0; ii<ncells; ii++){
-
-      int dummy;
-      int iicelltype = cell[ii].get_type(dummy); 
-      for( int jj=0; jj<ncad; jj++){      
-      	double detach = cell[ii].get_cadherin_time(jj);
-      	int tempattach = cell[ii].get_cadherin_attach(jj);
-      
-      	if(tempattach!=-1){			
-			    double length = cell[ii].get_cadherin_length(jj);  
-			    if(maxlength<length){
-	  			  detach=0;		  
-			    }
-			    cadattach++; //count how many caherins are attached
-      	}
-      		  
-        if (tempattach!=-1){
-	        int ajj = tempattach%ncad;			  
-		      int aii = static_cast<int>((tempattach - ajj)/ncad);//ncad (number of cadherins)=10
-
-		      int atempattach = cell[aii].get_cadherin_attach(ajj);	
-
-			  
-		      if(detach<t){//time to change, detaches jj cadherin		  
-	          cell[ii].set_cadherin_attach(jj,-1);
-		        double tmp;
-  	        if (iicelltype == 0) {//if cell is green, spore
-			        tmp = sto1.Poisson(average_unbound_cad_spore);//determine detach time//this is just to make a change
-			        tmp = tmp/3600 +t;
-		        }else {
-			        tmp = sto1.Poisson(average_unbound_cad_stalk);//determine detach time
-			        tmp = tmp/3600 +t;
-		        }
-
-	  
-	  
-	          cell[ii].set_cadherin_time(jj,tmp);//set detach time
+			
+		//loop through cells and determine if cadherins and integrins should release or not
 		
+		for(int ii = 0; ii < ncells; ii++) { // start cadherin
+			int dummy;
+			int iicelltype = cell[ii].get_type(dummy); 
+			for(int jj = 0; jj < ncad; jj++){      
+				double detach = cell[ii].get_cadherin_time(jj);
+				int tempattach = cell[ii].get_cadherin_attach(jj);
+		  
+				if(tempattach != -1) {			
+					double length = cell[ii].get_cadherin_length(jj);  
+					if(maxlength < length){
+						detach = 0;		  
+					}
+					cadattach++; //count how many caherins are attached
+				}
 				  
-	          if(atempattach != -1){//detaches other cell's cadherin, ajj  
-	            cell[aii].set_cadherin_attach(ajj,-1);
-		          double atmp;
-		          if (iicelltype == 0) {//if cell is green, spore
-			          atmp = sto1.Poisson(average_unbound_cad_spore);//determine detach time
-			          atmp = atmp/3600 +t;
-		          }else {
-			          atmp = sto1.Poisson(average_unbound_cad_stalk);//determine detach time
-			          atmp = atmp/3600 +t;
-		          }
-	            cell[aii].set_cadherin_time(ajj,atmp);//set detach time
-            }	  
-	        }
-	      }
-	    }//end cadherin
-	  
-      for( int jj=0; jj<nint; jj++){
-      	double detach = cell[ii].get_integrin_time(jj);
-  		  double length = cell[ii].get_integrin_length(jj);
-  	    int celltype;
-  	    int dummy;
-  	    int tempattach = cell[ii].get_integrin_attach(jj);
-  		  
-  		  int num;
-  		  num = cell[ii].get_type(dummy);
+				if(tempattach != -1) {
+					int ajj = tempattach%ncad;			  
+					int aii = static_cast<int>((tempattach - ajj)/ncad); //ncad (number of cadherins)=10
 
-  	    celltype = cell[ii].get_type(dummy);
+					int atempattach = cell[aii].get_cadherin_attach(ajj);	
 
-  	    if (tempattach == 0){ //count how many integrins are attached
-  	    	intattach++;
-  	    }
+				  
+					if(detach < t) {//time to change, detaches jj cadherin		  
+						cell[ii].set_cadherin_attach(jj,-1);
+						double tmp;
+						if (iicelltype == 0) {//if cell is green, spore
+							tmp = sto1.Poisson(average_unbound_cad_spore);//determine detach time//this is just to make a change
+							tmp = tmp/3600 + t;
+						}
+						else {
+							tmp = sto1.Poisson(average_unbound_cad_stalk);//determine detach time
+							tmp = tmp/3600 + t;
+						}
 
+						cell[ii].set_cadherin_time(jj,tmp);//set detach time		
+					  
+						if(atempattach != -1) {//detaches other cell's cadherin, ajj  
+							cell[aii].set_cadherin_attach(ajj,-1);
+							double atmp;
+							if (iicelltype == 0) {//if cell is green, spore
+								atmp = sto1.Poisson(average_unbound_cad_spore);//determine detach time
+								atmp = atmp/3600 + t;
+							}
+							else {
+								atmp = sto1.Poisson(average_unbound_cad_stalk);//determine detach time
+								atmp = atmp/3600 + t;
+							}
+							cell[aii].set_cadherin_time(ajj,atmp);//set detach time
+						}	  
+					}
+				}
+			} //end cadherin
 
+			for(int jj=0; jj < nint; jj++) {
+				double detach = cell[ii].get_integrin_time(jj);
+				double length = cell[ii].get_integrin_length(jj);
+				int celltype;
+				int dummy;
+				int tempattach = cell[ii].get_integrin_attach(jj);
+			  
+				int num;
+				num = cell[ii].get_type(dummy);
 
-      	if(detach<t){//time to change
-  			 
-  		    if(cell[ii].get_integrin_attach(jj) == 0){ //detach   
-  	        double tmp;
-  	        cell[ii].set_integrin_attach(jj,-1);
-  	        int iitype;
-  	        cell[ii].get_type(iitype);				
-  	        if(iitype==1){//if cell is celltype A, set tmp
-  			      tmp = sto1.Poisson(average_unbound_int_stalk);
-  		        tmp = tmp/3600 +t;
-  	        }else{//if cell is not celltype A, set tmp
-  	          tmp = sto1.Poisson(average_unbound_int_spore);
-  		        tmp = tmp/3600 +t;
-  	        }
-  	        cell[ii].set_integrin_time(jj,tmp);   
-  	      }//All cells reset integrin times
-      	}
-      }//end integrin  
-    }// end cell loop
+				celltype = cell[ii].get_type(dummy);
 
+				if(tempattach == 0) { //count how many integrins are attached
+					intattach++;
+				}
 
-	  
-    // loop through the cells and attach the cadherins and integrins 
-  	  
-  	for (int ii = 0; ii<ncells; ii++)
-  	  jindex[ii]= ii;
-  	// randomize  jindex	
-  	for( int ii = ncells-1; ii>=1; ii--){
-  	  int jj = rg1.IRandom(0,ii) ; 
-  	  int tmp = jindex[ii];
-  	  jindex[ii] = jindex[jj];
-  	  jindex[jj] = tmp;
-  	}
-
-    for( int j = 0; j<ncells; j++){
-      int restart = cell[j].restart;
-      for( int i = 0; i<ncad; i++){
-    		if(cell[jindex[j]].get_cadherin_time(i)<t){
-    		  if (restart==0) {// if stopped it must be blue, so we won't check for blue celltype
-    		  }else {
-    			cell[jindex[j]].update_cadherins(dt,t,average_spore,average_stalk,average_different,restart, average_unbound_cad_spore,average_unbound_cad_stalk,i,jindex[j],cell);//updating all cells in random order
-    		  }	    
-    		}  		  
-      }
-  		
-      for( int i = 0; i<nint; i++){      
-	      if(cell[jindex[j]].get_integrin_time(i)<t){//if it's time for the integrin to attach
-	        //check to see if the cell is close enough to the substrate
-	        double center[2];			       
-	        cell[jindex[j]].get_center(center,2);
-	        if(center[1]<7){// 5 is the unstretched integrin length the substrate is at y=0 so if the cell center is 7+5 it is close enough to attach;	  
-			      int restart = cell[jindex[j]].restart;
-			      int dummy;  
-			      if (cell[jindex[j]].get_type(dummy) == 0) {//if cell is green
-			        cell[jindex[j]].update_integrins(dt,t,average_substrate_spore, average_substrate_stalk, restart,i,jindex[j],cell);//update integrins
-			      }else {//if cell is blue
-			        if (restart ==1) {//and going
-				        cell[jindex[j]].update_integrins(dt,t,average_substrate_spore, average_substrate_stalk, restart,i,jindex[j],cell);//update integrins
-			        }else {//if cell is stopped
-				        //do nothing; don't attach
-			        }
-			      }
-	  	    }
-		    }
-      }
-    }
- 
-    //count the cadherins and integrins which need to be moved
-    for (int ii =0; ii<ncells; ii++){
-      for( int jj=0; jj<ncad; jj++){ 
-    	  if(cell[ii].get_cadherin_attach(jj)!=-1){
-    	    cadherins_update[number_cadherins_update] = ii*ncad+jj;
-    	    number_cadherins_update = number_cadherins_update +1;
-    	  }
-      } 
-      for( int jj=0; jj<nint; jj++){
-    	  if(cell[ii].get_integrin_attach(jj)!=-1){
-    	    integrins_update[number_integrins_update] = ii*nint+jj;
-    	    number_integrins_update = number_integrins_update +1;
-    	  }
-      }    
-	  }
-
-    if((number_cadherins_update+number_integrins_update)!=0){
-      update_cadherin_cell_center_location(cvode_mem, number_cadherins_update,cadherins_update, number_integrins_update,integrins_update,dt,cell);// THIS MOVES THE CENTERS AND THE NODES
-    }
-    localize_node_grid_update_all(cell);
+				if(detach < t) { //time to change
+				 
+					if(cell[ii].get_integrin_attach(jj) == 0) { //detach   
+						double tmp;
+						cell[ii].set_integrin_attach(jj,-1);
+						int iitype;
+						cell[ii].get_type(iitype);				
+						if(iitype == 1) { //if cell is celltype A, set tmp
+							tmp = sto1.Poisson(average_unbound_int_stalk);
+							tmp = tmp/3600 +t;
+						}
+						else { //if cell is not celltype A, set tmp
+							tmp = sto1.Poisson(average_unbound_int_spore);
+							tmp = tmp/3600 +t;
+						}
+						cell[ii].set_integrin_time(jj,tmp);   
+					} //All cells reset integrin times
+				}
+			} //end integrin  
+		} // end cell loop
 
 
-    // output data 
-    if(it%20==0){  
-      *foutf << dt*it << "\n";
-  	  for( int j = 0; j<ncells; j++){
-  	    cell[j].print_output(foutc,it+1,dt);
-  	    cell[j].print_output_force(foutf,it,dt);
-      }
-      *foutf << "\n";
-    }else if(it%20==1){
-    	for (int j=0; j<ncells; j++){
-    		*foutcf << cell_forces[2*j] << " " << cell_forces[2*j+1] << "\n";
-    	}
-    }
-    cout<<"Time = "<<(it+1)*dt<<"\n";
-	  *foutr << it*dt << " " << cadattach << " " << intattach << "\n";
-	
-  }// end to time loop
+		  
+		// loop through the cells and attach the cadherins and integrins 
+		  
+		for(int ii = 0; ii<ncells; ii++) jindex[ii]= ii;
+		// randomize  jindex	
+		for(int ii = ncells-1; ii>=1; ii--) {
+			int jj = rg1.IRandom(0,ii) ; 
+			int tmp = jindex[ii];
+			jindex[ii] = jindex[jj];
+			jindex[jj] = tmp;
+		}
 
-  //october
-  int totx = 0;
-  for (int i = 0; i < ncells; i++){
-  	double value[1];
-  	cell[i].get_center(value,1);
-  	totx += value[0];
-  }
-  foutm << 1.0*totx/ncells << "\n";
+		for(int j = 0; j < ncells; j++){
+			int restart = cell[jindex[j]].restart;
+			
+			for(int i = 0; i<ncad; i++){
+				if(cell[jindex[j]].get_cadherin_time(i) < t){
+					if(restart==0) { // if stopped it must be blue, so we won't check for blue celltype
+					}
+					else {
+						cell[jindex[j]].update_cadherins(dt,t,average_spore,average_stalk,average_different,restart, average_unbound_cad_spore,average_unbound_cad_stalk,i,jindex[j],cell);//updating all cells in random order
+					}	    
+				}  		  
+			}
+			
+			for(int i = 0; i < nint; i++) {      
+				if(cell[jindex[j]].get_integrin_time(i)<t){//if it's time for the integrin to attach
+					//check to see if the cell is close enough to the substrate
+					double center[2];			       
+					cell[jindex[j]].get_center(center,2);
+					if(center[1] < 7) { // 5 is the unstretched integrin length the substrate is at y=0 so if the cell center is 7+5 it is close enough to attach;	  
+						int restart = cell[jindex[j]].restart;
+						int dummy;  
+						if(cell[jindex[j]].get_type(dummy) == 0) { //if cell is green
+							cell[jindex[j]].update_integrins(dt,t,average_substrate_spore, average_substrate_stalk, restart,i,jindex[j],cell);//update integrins
+						}
+						else { //if cell is blue
+							if(restart == 1) { //and going
+								cell[jindex[j]].update_integrins(dt,t,average_substrate_spore, average_substrate_stalk, restart,i,jindex[j],cell);//update integrins
+							}
+							else { //if cell is stopped
+							//do nothing; don't attach
+							}
+						}
+					}
+				}
+			}
+		}
+	 
+		//count the cadherins and integrins which need to be moved
+		for(int ii = 0; ii < ncells; ii++) {
+			for(int jj = 0; jj < ncad; jj++) { 
+				if(cell[ii].get_cadherin_attach(jj) != -1) {
+					cadherins_update[number_cadherins_update] = ii*ncad+jj;
+					number_cadherins_update++;
+				}
+			}
+			for(int jj = 0; jj < nint; jj++) {
+				if(cell[ii].get_integrin_attach(jj)!=-1){
+					integrins_update[number_integrins_update] = ii*nint+jj;
+					number_integrins_update++;
+				}
+			}    
+		}
 
-  foutc->close();
-  foutf->close();
-  foutr->close();
-  foutcf->close();
-  foutm.close();
-  delete foutc;
+		if((number_cadherins_update+number_integrins_update) != 0){
+			update_cadherin_cell_center_location(cvode_mem, number_cadherins_update,cadherins_update, number_integrins_update,integrins_update,dt,cell);// THIS MOVES THE CENTERS AND THE NODES
+		}
+		localize_node_grid_update_all(cell);
 
-  CVodeFree(&cvode_mem);
-  return 0;
-	
+
+		// output data 
+		if(it%20 == 0) {  
+			foutf << dt*it << "\n";
+			for(int j = 0; j<ncells; j++) {
+				cell[j].print_output(foutc,it+1,dt);
+				cell[j].print_output_force(foutf,it,dt);
+			}
+			foutf << "\n";
+		}
+		else if(it%20 == 1) {
+			for (int j=0; j<ncells; j++) {
+				foutcf << cell_forces[2*j] << " " << cell_forces[2*j+1] << "\n";
+			}
+		}
+		//cout<<"Time = "<<(it+1)*dt<<"\n";
+
+
+		foutr << it*dt << " " << cadattach << " " << intattach << "\n";
+		
+	}// end to time loop
+
+	cout << cad_averand/cad_numang << "\n";
+	cout << cad_avedir[0]/cad_numang << "  " << cad_avedir[1]/cad_numang << "\n";
+	for(int ii = 0; ii <9; ii++){
+		cout << avejindex[ii]/cad_numang << " ";
+	}
+	cout << "\n";
+	cout << int_averand/int_numang << "\n";
+	cout << int_avedir[0]/int_numang << "  " << int_avedir[1]/int_numang << "\n";
+
+	int totx = 0;
+	for(int i = 0; i < ncells; i++) {
+		double value[1];
+		cell[i].get_center(value,1);
+		totx += value[0];
+	}
+	foutm << 1.0*totx/ncells << "\n";
+
+	foutc.close();
+	foutf.close();
+	foutr.close();
+	foutcf.close();
+	foutm.close();
+
+	CVodeFree(&cvode_mem);
+	return 0;
 }
 
 // end of main
@@ -492,18 +517,18 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
     //    int iwork[liw];
     //    double tmpx[nn];           // holds the location of the cell center and cadherins
             double tmpx[ncells*(ncad+1)*dim];           // holds the location of the cell center and cadherins
-    // double tmpx[ncells*dim+nn+1];           // holds the location of the cell center and cadherins
-	//   double tmpx[nnnmax];           // holds the location of the cell center and cadherins
+    //    double tmpx[ncells*dim+nn+1];           // holds the location of the cell center and cadherins
+	//    double tmpx[nnnmax];           // holds the location of the cell center and cadherins
     //    double tmpx[nnmax];           // holds the location of the cell center and cadherins
     //    double of[nn];             //the residual of the nonlinear function
     //    double su[nn];             // scaling array
             	  double su[ncells*(ncad+1)*dim];        // scaling arra
     //    double su[ncells*dim+nn+1];        // scaling arra
-		  // double su[nnnmax];             // scaling array
+	//	  double su[nnnmax];             // scaling array
     //    for(int m=0; m<=nn-1; m++)
-       //	 for(int m=0; m<=nnnmax-1; m++)
+	//	  for(int m=0; m<=nnnmax-1; m++)
 
-       	  	  for(int m=0; m<=ncells*(ncad+1)*dim-1; m++)
+	  for(int m=0; m<=ncells*(ncad+1)*dim-1; m++)
 	  //    for(int m=0; m<=ncells*dim+nn; m++)
       {
 	su[m]=1.0;
@@ -527,7 +552,7 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
 
 
     
-    //    lode in the cell center locations and ncadherin
+    //    load in the cell center locations and ncadherin
     for( int i = 0; i<ncells; i++){
       int ii = dim*(i);
       double center[dim];
@@ -538,7 +563,7 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
       tmpx[ii+1] = center[1]; 
       //    cout<< " center "<<center[0]<<" "<<center[1]<<" dim "<<dim<<" i "<<i<<"\n";
     }
-    //lode in the cadherins locations
+    //load in the cadherins locations
     for( int i = 0; i<ncadherins; i++){
 	int ii = dim*(i+ncells);
 	double vector[dim];
@@ -639,7 +664,7 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
                             Initialize cells 
 ************************************************************************************/
 
-void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *fout){
+void initialize_cells(int ncx,int ncy, Cell *cell, ofstream& fout){
   double dx = 5; // 10 microns apart for each cell
   double dy = 5; // 10 microns apart for each cell
 
@@ -724,7 +749,7 @@ void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *fout){
 
 	  cadherin_initial[i].attach = -1;    
 	  cadherin_initial[i].time = 0;
-	  cadherin_initial[i].front_indicator = 0;
+	  //cadherin_initial[i].front_indicator = 0;
 	}
 	//     }
 
@@ -742,7 +767,7 @@ void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *fout){
 
 	  integrin_initial[i].attach = -1;    
 	  integrin_initial[i].time = 0;
-	  integrin_initial[i].front_indicator = 0;
+	  //integrin_initial[i].front_indicator = 0;
 	}
 
 	cell[ii].initialize(xc,yc,cadherin_initial,integrin_initial,fx,fy,type);
@@ -756,7 +781,7 @@ void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *fout){
     }    
   }
   //october
-  *fout << 1.0*totx/ncells << " ";
+  fout << 1.0*totx/ncells << " ";
 
 }
 
@@ -765,7 +790,7 @@ void initialize_cells(int ncx,int ncy, Cell *cell, ofstream *fout){
            This function assigns each square grid all the cells in it. 
 *************************************************************************************/
 
-void localize_node_grid_update_all (Cell *cell)
+void localize_node_grid_update_all(Cell *cell)
 {
   int l, m, i, j;
 
