@@ -21,7 +21,7 @@ struct Cadherin
   double mu;          // the dashpot coefficient
   double time;         // time for the cadherin to dettach
   int attach;         // -1 means it is free and 0 and up means attached to cadherin (indicates cellnumber*ncad+cadherin_index to identify cadherin to which it is attached)
- // int front_indicator; // dalcff means it is in the front and 1 means it is in the back
+  int front_indicator; // dalcff means it is in the front and 1 means it is in the back
 	
 };
 struct Integrin 
@@ -34,7 +34,7 @@ struct Integrin
   double mu;          // the dashpot coefficient
   double time;         // time for the integrin to dettach
   int attach;         // -1 means it is free and 0 means attached to substrate
-//  int front_indicator; // 0 means it is in the front and 1 means it is in the back
+  int front_indicator; // 0 means it is in the front and 1 means it is in the back
 };
 class Cell
 {
@@ -42,19 +42,20 @@ class Cell
   double center[2];         // the coordinates of the center of the cell
   Cadherin cadherin[ncad];  // the cadherins
   Integrin integrin[nint];  // the integrins
- // double front[2];         // the vector indicating the front of the cell
+  double front[2];         // the vector indicating the front of the cell
   int ncadherin; // a variable the same for all cells which is used in move_nodes
   int nintegrin; // number of integrins attached to substrate
   int celltype; //0 is spore cell, 1 is stalk 
 
-  void calculate_cadherin_length(int cadherin_index); 
-  void calculate_cadherin_force(int cadherin_index);    
-  void calculate_cadherin_vector(int cadherin_index);    
-
+	void calculate_cadherin_length(int cadherin_index); 
+	void calculate_cadherin_force(int cadherin_index);    
+	void calculate_cadherin_vector(int cadherin_index);
+	void calculate_cadherin_front_indicator(int integrin_index);
+	
   void calculate_integrin_length(int integrin_index); 
   void calculate_integrin_force(int integrin_index);    
   void calculate_integrin_vector(int integrin_index);    
-  //void calculate_integrin_front_indicator(int integrin_index);
+  void calculate_integrin_front_indicator(int integrin_index);
 
   void update_cadherin_attachment(int cadherin_index, double dt);
   void update_cadherin_attachment_new(int cadherin_index, double dt,double t, double average_spore,double average_stalk[], double average_different, int restart, double average_unbound_cad_spore, double average_unbound_cad_stalk,int cell_index, Cell *cell);
@@ -71,11 +72,8 @@ class Cell
   ~Cell();
   int restart;
 
- // void calculate_cadherin_front_indicator(int cadherin_index);
-
-
   void get_center(double value[], int lim);
- // void get_front(double value[], int lim);
+  void get_front(double value[], int lim);
 
   double get_cadherin_length(int cadherin_index);
   double get_cadherin_force(int cadherin_index);
@@ -86,7 +84,7 @@ class Cell
   double get_cadherin_time(int cadherin_index);
   void get_cadherin_location(int cadherin_index, double value[], int lim);
   void get_cadherin_vector(int cadherin_index, double value[], int lim);
- // int get_cadherin_front_indicator(int cadherin_index);
+  int get_cadherin_front_indicator(int cadherin_index);
   double get_integrin_length(int integrin_index);
   double get_integrin_force(int integrin_index);
   double get_integrin_kspring(int integrin_index);
@@ -96,11 +94,11 @@ class Cell
   double get_integrin_time(int integrin_index);
   void get_integrin_location(int integrin_index, double value[], int lim);
   void get_integrin_vector(int integrin_index, double value[], int lim);
-//  int get_integrin_front_indicator(int integrin_index);
+  int get_integrin_front_indicator(int integrin_index);
   int get_type(int type);
 
   void set_center(double value[], int lim);
-  //void set_front(double value[], int lim);
+  void set_front(double value[], int lim);
   void set_type(int value);
 
   void set_cadherin_attach(int cadherin_index, int value);
@@ -115,8 +113,8 @@ class Cell
 
 
   void move_center(double dt);
-  void print_output(ofstream *fout, int n, double dt);
-  void print_output_force(ofstream *fout,int n, double dt);
+  void print_output(ofstream& fout, int n, double dt);
+  void print_output_force(ofstream& fout,int n, double dt);
   void update_cadherins(double dt, double t,double average_spore,double average_stalk[], double average_different,int restart,double average_unbound_cad_spore, double average_unbound_cad_stalk, int inode,int cell_index,Cell *cell);
   void update_cadherins_initial(double dt, double average_spore,double average_stalk[], double average_different,int restart, double average_unbound_cad_spore, double average_unbound_cad_stalk,int ni, int index_cell,Cell *cell);
   void update_integrins(double dt, double t,double average_substrate_spore,double average_substrate_stalk[],int restart, int inode,int cell_index,Cell *cell);
