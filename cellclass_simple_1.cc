@@ -32,7 +32,7 @@ void Cell::calculate_cadherin_vector(int cadherin_index){
   cadherin[cadherin_index].vector[1] = cadherin[cadherin_index].location[1]-center[1];
 }
 
-void Cell::calculate_cadherin_front_indicator(int cadherin_index){
+void Cell::calculate_cadherin_front_indicator(int cadherin_index) {
 	double tmp;
 	tmp = cadherin[cadherin_index].vector[0]*front[0]+ cadherin[cadherin_index].vector[1]*front[1];//front is a unit vector, [1,0]
 	cadherin[cadherin_index].front_indicator = 0;// front	
@@ -738,20 +738,20 @@ void Cell::move_center(double dt){
   }
 }
 
-void Cell::print_output(ofstream *fout, int n, double dt){
+void Cell::print_output(ofstream& fout, int n, double dt){
   // Print the output suitable for plot_cell.m
   // Print the time
-  *fout << n*dt << "\n";
+  fout << n*dt << "\n";
   // Print the cell center
-  *fout << center[0] << " " << center[1] << "\n";
+  fout << center[0] << " " << center[1] << "\n";
   // Print the cell type
-  *fout << celltype << "\n"; 
+  fout << celltype << "\n"; 
   // Print the cadherin information
   for (int i=0; i<ncad; i++){
 	  calculate_cadherin_front_indicator(i);
       double vector[2];
       get_cadherin_location(i, vector,2) ;    
-    *fout << vector[0] << " " << vector[1] << " " << cadherin[i].attach << " "
+    fout << vector[0] << " " << vector[1] << " " << cadherin[i].attach << " "
 	<< cadherin[i].front_indicator << "\n";
     //    cout<<cadherin[i].attach<<" att "<<i<<" i "<<"\n";
   }
@@ -759,13 +759,13 @@ void Cell::print_output(ofstream *fout, int n, double dt){
   for (int i=0; i<nint; i++){
       double vector[2];
       get_integrin_location(i, vector,2) ;    
-    *fout << vector[0] << " " << vector[1] << " " << integrin[i].attach << " "
+    fout << vector[0] << " " << vector[1] << " " << integrin[i].attach << " "
 	<< integrin[i].front_indicator << "\n";
     //    cout<<integrin[i].attach<<" att "<<i<<" i "<<"\n";
   }
 }
 
-void Cell::print_output_force(ofstream *fout, int n, double dt){
+void Cell::print_output_force(ofstream& fout, int n, double dt){
   // Print the output suitable for matlab forces on substrate
   for (int i=0; i<nint; i++){
     Integrin& cur_int = integrin[i];
@@ -782,7 +782,7 @@ void Cell::print_output_force(ofstream *fout, int n, double dt){
       if(tmplength<1e-8){
 	      tmplength=1.;
       }
-      *fout<< cur_int.vector[0]/tmplength*stretch*cur_int.kspring<<"  ";
+      fout<< cur_int.vector[0]/tmplength*stretch*cur_int.kspring<<"  ";
     }
   }
 }
