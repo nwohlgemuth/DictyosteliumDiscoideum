@@ -152,7 +152,7 @@ double Cell::get_cadherin_force(int cadherin_index) const {
 }
 
 double Cell::get_cadherin_kspring(int cadherin_index, int attach) const {
-  return cadherin[cadherin_index].kspring[attach];
+	return cadherin[cadherin_index].kspring[attach];
 }
 
 double Cell::get_cadherin_mu(int cadherin_index) const {
@@ -328,7 +328,7 @@ void Cell::update_cadherin_attachment_initial(int cadherin_index, double dt, dou
 			jindex[ii] = jindex[jj];
 			jindex[jj] = tmp;
 		}
-		  
+		
 		int tmpi;
 		int tmpj;
 		for(int jj = 0; jj < 9; jj++) {
@@ -429,9 +429,9 @@ void Cell::update_cadherin_attachment_new(int cadherin_index, double dt,double t
 			frontdeg = 3*pi/2;
 		}
 	}
-  
+	
 	temprand += frontdeg;
-
+	
 	//THIS IS WHERE WE DETERMINE HOW MANY OF OUR BLUE CADHERINS ATTACH Back vs Front
 	if(iicelltype == 1) { //if cell is blue
 		if(new_dir[0] < 0) { //if the cadherin is in the back
@@ -447,22 +447,22 @@ void Cell::update_cadherin_attachment_new(int cadherin_index, double dt,double t
 			}
 		}
 	}
-
+	
 	new_dir[0] = cos(temprand)*new_length;
 	new_dir[1] = sin(temprand)*new_length;
-
+	
 	double newx =  center[0] + new_dir[0];
 	double newy  = center[1] +new_dir[1];
 	calculate_cadherin_vector(cadherin_index);
 	calculate_cadherin_front_indicator(cadherin_index);
-
+	
 	cur_int.location[0] = newx;
 	cur_int.location[1] = newy;
-
+	
 	{ // binds with another cadherin
 		int i = static_cast<int> (newx/(lng_scale));
 		int j = static_cast<int> (newy/(lng_scale));
-		  
+		
 		// Check the first grid then randomly loop through the 8 grid
 		// squares until a node is located
 		// Randomly loop through the values of k
@@ -490,7 +490,7 @@ void Cell::update_cadherin_attachment_new(int cadherin_index, double dt,double t
 			jindex[ii] = jindex[jj];
 			jindex[jj] = tmp;
 		}
-	  
+		
 		int tmpi;
 		int tmpj;
 		for(int jj = 0; jj < 9; jj++) {
@@ -539,7 +539,7 @@ void Cell::update_cadherin_attachment_new(int cadherin_index, double dt,double t
 								}
 								
 								cell[icell].set_cadherin_time(inode,cur_int.time);
-
+								
 								double vector[2];
 								// Set position of cadherin which was free to the location of the reaching cadherin 
 								for(int i = 0; i < 2; i++) {
@@ -574,7 +574,7 @@ void Cell::update_cadherin_attachment(int cadherin_index, double dt) {
 	// generate a random number from 0 to 1 from a uniform distribution
 	double temprand;
 	if(cur_int.front_indicator == 1) {// cadherin is in the back 
-	//if(cur_int.time<t) {// detach the cadherin and reattach it
+		//if(cur_int.time<t) {// detach the cadherin and reattach it
 		temprand=rg.Random();  // random number between 0 and 1
 		double degree = 10;
 		temprand = 2*(temprand -.5)*degree*pi/180; // gives an angle from -degree to degree in radians
@@ -657,7 +657,7 @@ void Cell::update_integrin_attachment_new(int integrin_index, double dt,double t
 	//temprand = -pi/2.;
 	double new_dir[2];
 	double prob=0;
-
+	
 	//add temprand to the direction the cell is moving
 	double new_length;
 	new_length = rg.Random()*basic_length_int; // make length random adding onto basic length of 5 microns
@@ -665,7 +665,7 @@ void Cell::update_integrin_attachment_new(int integrin_index, double dt,double t
 	new_dir[1] = sin(temprand)*new_length;
 	double newx =  center[0] + new_dir[0];
 	double newy  = center[1] +new_dir[1];
-
+	
 	cur_int.location[0] = newx;
 	cur_int.location[1] = newy;
 	// not called if cell is not close enough to substrate. The substrate is at y=0
@@ -717,8 +717,8 @@ void Cell::move_center(double dt) {
 
 void Cell::print_output(ofstream& fout, int n, double dt) {
 	/*
-		Print the output suitable for plot_cell.m
-	*/
+	 Print the output suitable for plot_cell.m
+	 */
 	fout << n*dt << "\n"; // Print the time
 	fout << center[0] << " " << center[1] << "\n"; // Print the cell center
 	fout << celltype << "\n"; // Print the cell type
