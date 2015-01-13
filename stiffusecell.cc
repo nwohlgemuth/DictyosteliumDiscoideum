@@ -1,26 +1,26 @@
 /*************************************************************************************
-      This code was initially written by Dr. John Dallon, Brigham Young University 
-      
+ This code was initially written by Dr. John Dallon, Brigham Young University 
  
-	  This code was further modified by Nathan Wohlgemuth, Brigham Young University
-*************************************************************************************/
+ 
+ This code was further modified by Nathan Wohlgemuth, Brigham Young University
+ *************************************************************************************/
 
 /****************************************Notes****************************************
-1. Cell speeds of 30 microns per hour and shape of 100 microns stretched on a substrate 
-(from Journal of Cell Science 111, 2423-2432 1998.  "Epidermal growth factor alters 
-fibroblast migration speed and directional persistence reciprocally and  in a 
-matrix-dependent manner" by Magaret F. Ware, Alan Wells, and Douglas A Lauffenburger.)
-2. Rho kinase mediates serum-induced contraction in fibroblast fibers independent of 
-myosin LC20 phosphorylation (Am J Physiol Cell Physiol 284: C599-C606, 2003) 
-3. Hiromi Nobe1, Koji Nobe1, Fabeha Fazal2, Primal de Lanerolle2, and Richard J. Paul1
-measured forces of 5.3e-7 Newtons for fibroblasts .003 Dynes from Balaban et al.,2001 
-and 1 Dyne per 10 square micron patch Munevar et al., 2001 
-4. For Dd Uchida and Yumura 2004 report that contact sites have
-duration of 19+-8 sec, more contacts in front of cell as back
-retracts, 5 contact gave speeds from 10-1microns/min.  15-20 contact
-give speeds of 0-4.
-5. Units are microns and hours and grams. 
-*************************************************************************************/
+ 1. Cell speeds of 30 microns per hour and shape of 100 microns stretched on a substrate 
+ (from Journal of Cell Science 111, 2423-2432 1998.  "Epidermal growth factor alters 
+ fibroblast migration speed and directional persistence reciprocally and  in a 
+ matrix-dependent manner" by Magaret F. Ware, Alan Wells, and Douglas A Lauffenburger.)
+ 2. Rho kinase mediates serum-induced contraction in fibroblast fibers independent of 
+ myosin LC20 phosphorylation (Am J Physiol Cell Physiol 284: C599-C606, 2003) 
+ 3. Hiromi Nobe1, Koji Nobe1, Fabeha Fazal2, Primal de Lanerolle2, and Richard J. Paul1
+ measured forces of 5.3e-7 Newtons for fibroblasts .003 Dynes from Balaban et al.,2001 
+ and 1 Dyne per 10 square micron patch Munevar et al., 2001 
+ 4. For Dd Uchida and Yumura 2004 report that contact sites have
+ duration of 19+-8 sec, more contacts in front of cell as back
+ retracts, 5 contact gave speeds from 10-1microns/min.  15-20 contact
+ give speeds of 0-4.
+ 5. Units are microns and hours and grams. 
+ *************************************************************************************/
 
 // Changing the reach length of the cadherins from 15 to 5 makes a more slender slug
 // If the integrin length is 5 the back of the slug cannot stay attached 10 is better.
@@ -28,6 +28,7 @@ give speeds of 0-4.
 #include <cmath>
 #include <fstream> 
 #include <sstream>
+#include <iostream>
 
 //#include "util.h" // I cannot find this file anywhere (Jan 10, 2015)
 #include "cellclass.h"
@@ -36,14 +37,16 @@ give speeds of 0-4.
 #include "/usr/local/include/cvode/cvode.h"
 #include "/usr/local/include/cvode/cvode_spgmr.h"
 #include "/usr/local/include/nvector/nvector_serial.h" 
- 
+
 namespace patch { // Fixes a known g++ compiler bug (gcc 4.8.0 and higher have this bug fixed); Added Jan 10, 2015
-    template <typename T> std::string to_string(const T& n) {
-        std::ostringstream stm;
+	template <typename T> std::string to_string(const T& n) {
+		std::ostringstream stm;
         stm << n;
         return stm.str();
     }
 }
+
+using std::cout;
 
 /* function declarations */
 void initialize_cells(int ncx,int ncy, Cell *cell, ofstream& foutc);
@@ -61,13 +64,13 @@ int seed = 3894;
 CRandomMersenne rg1(seed);
 StochasticLib2 sto1(13948); 
 // TRandomMersenne rg1(seed); 
- 
+
 int  localize_node_grid[lnx][lny][lgrd];
 double basic_length_cad; // in micrometer
 double basic_length_int; // in micrometer
 double basic_length_back_factor;
 int initialrestart = 1; // 1 makes A cells move, 0 makes A cells stop
- 
+
 // cell values
 double average_spore = 25;// average attach time in sec from another cadherin
 double average_stalk[2] = {25,25};// average attach time in sec from another cadherin
@@ -122,9 +125,9 @@ int main() {
 		cout << "cellmotion.dat not found" << endl;
 	}
     fin.close();
-
+	
     //prob_factor_back = prob_factor_back*.1; 
-  
+	
 	fin.clear(); // reset the fin objects error flags
     fin.open("params.dat"); // if file opening reported no errors
 	if(fin.good()) {
@@ -135,26 +138,26 @@ int main() {
 		cout << "params.dat not found" << endl;
 	}
     fin.close();
-  
+	
 	ofstream foutm;
 	foutm.open("mass_centers.dat",ios::app);
 	foutm << average_spore << " " << average_unbound_cad_spore << " ";
-
+	
 	cout << "Running " << average_spore << "/" << average_unbound_cad_spore << endl;
-
+	
 	ofstream foutr; // attach ratios
 	foutr.open(("attach_ratios_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
-		
+	
 	ofstream foutf; // force output
 	foutf.open(("force_output_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
-  
+	
 	ofstream foutc; // cell output
 	foutc.open(("cell_output_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
-
+	
 	ofstream foutcf; // cell forces
 	foutcf.open(("cell_forces_" + patch::to_string(average_spore) + "_" + patch::to_string(average_unbound_cad_spore) + ".dat").c_str());
-
-
+	
+	
 	ifstream pin; 
 	pin.open("cadviscosityfactor.txt"); // open file to read
 	if(pin.good()) { // if file opening reported no errors
@@ -164,15 +167,15 @@ int main() {
 		cout << "cadviscosityfactor.txt not found" << endl;
 	}
 	pin.close();
-
+	
 	Cell * cell = new Cell[ncells]; // get memory for array of cells
 	initialize_cells(cx,cy,cell,foutm); //was foutc
-
-
+	
+	
 	//TRandomMersenne rg1(seed);
 	/* SETUP for the nonlinear solver CVODE */ 
 	void *cvode_mem;
-
+	
 	cvode_mem = NULL;//is this where it needs to be set to the largest size of data we can get from caherins; check this if getting segmentation fault
 	N_Vector sc;
 	sc = N_VNew_Serial(nnmax);
@@ -180,7 +183,7 @@ int main() {
 	/* Call KINCreate / KINMalloc to initialize KINSOL :
 	 nvSpec is the nvSpec pointer used in the serial version
 	 A pointer to KINSOL problem memory is returned and stored in cvode_mem . */
-
+	
 	cvode_mem = CVodeCreate(CV_BDF,CV_NEWTON);  // for stiff problems
 	// cvode_mem= CVodeCreate(CV_ADAMS,CV_FUNCTIONAL); // for non stiff problems
 	if ( check_flag (( void *) cvode_mem, " CVodeCreate ", 0)) return (1);
@@ -189,7 +192,7 @@ int main() {
 	int maxstep = 20000;
 	flag = CVodeSetMaxNumSteps(cvode_mem, maxstep);
 	if ( check_flag ( &flag , "CVodeSetMaxNumSteps", 1)) return(1) ;
-
+	
 	localize_node_grid_update_all(cell);
 	for(int j = 0; j < ncells; j++) {
 		int restart = cell[j].restart;
@@ -214,7 +217,7 @@ int main() {
 			}
 		}
 	}
-
+	
 	foutc << ncells << "\n"; // Output the number of cells
 	foutc << ncad << "\n"; // Output the number of cadherins
 	foutc << nint << "\n"; // Output the number of integrins
@@ -223,7 +226,7 @@ int main() {
 		cell[j].print_output(foutc,0,dt);
 	}
 	cout << "Time = 0" << endl;
-
+	
 	// move the cell
 	double prob;
 	for(int it = 0; it <= ntime; it++) {
@@ -232,7 +235,7 @@ int main() {
 		double t = (it+1)*dt;
 		number_cadherins_update = 0;
 		number_integrins_update = 0;
-
+		
 		for(int j = 0; j<ncells; j++) {    
 			// initialize array
 			for(int i = 0; i<ncad; i++) {  
@@ -242,14 +245,14 @@ int main() {
 				integrins_update[j*nint+i] = 0;
 			} 
 		}
-
+		
 		//loop through cells and determine if cadherins and integrins should release or not		
 		for(int ii = 0; ii < ncells; ii++) { // start cadherin
 			int iicelltype = cell[ii].get_type(); 
 			for(int jj = 0; jj < ncad; jj++) {      
 				double detach = cell[ii].get_cadherin_time(jj);
 				int tempattach = cell[ii].get_cadherin_attach(jj);
-		  
+				
 				if(tempattach != -1) {			
 					double length = cell[ii].get_cadherin_length(jj);  
 					if(maxlength < length) {
@@ -257,14 +260,14 @@ int main() {
 					}
 					cadattach++; //count how many caherins are attached
 				}
-				  
+				
 				if(tempattach != -1) {
 					int ajj = tempattach%ncad;			  
 					int aii = static_cast<int>((tempattach - ajj)/ncad); //ncad (number of cadherins)=10
-
+					
 					int atempattach = cell[aii].get_cadherin_attach(ajj);	
-
-				  
+					
+					
 					if(detach < t) {//time to change, detaches jj cadherin		  
 						cell[ii].set_cadherin_attach(jj,-1);
 						double tmp;
@@ -276,9 +279,9 @@ int main() {
 							tmp = sto1.Poisson(average_unbound_cad_stalk);//determine detach time
 							tmp = tmp/3600 + t;
 						}
-
+						
 						cell[ii].set_cadherin_time(jj,tmp);//set detach time		
-					  
+						
 						if(atempattach != -1) {//detaches other cell's cadherin, ajj  
 							cell[aii].set_cadherin_attach(ajj,-1);
 							double atmp;
@@ -295,7 +298,7 @@ int main() {
 					}
 				}
 			} //end cadherin
-
+			
 			for(int jj = 0; jj < nint; jj++) {
 				double detach = cell[ii].get_integrin_time(jj);
 				double length = cell[ii].get_integrin_length(jj);
@@ -309,8 +312,7 @@ int main() {
 					if(cell[ii].get_integrin_attach(jj) == 0) { //detach   
 						double tmp;
 						cell[ii].set_integrin_attach(jj,-1);
-						int iitype;
-						cell[ii].get_type(iitype);				
+						int iitype = cell[ii].get_type();				
 						if(iitype == 1) { //if cell is celltype A, set tmp
 							tmp = sto1.Poisson(average_unbound_int_stalk);
 							tmp = tmp/3600 +t;
@@ -324,7 +326,7 @@ int main() {
 				} // end if
 			} //end integrin  
 		} // end cell loop
-
+		
 		// loop through the cells and attach the cadherins and integrins 		  
 		for(int ii = 0; ii < ncells; ii++) jindex[ii] = ii;
 		// randomize  jindex	
@@ -334,7 +336,7 @@ int main() {
 			jindex[ii] = jindex[jj];
 			jindex[jj] = tmp;
 		}
-
+		
 		for(int j = 0; j < ncells; j++) {
 			int restart = cell[jindex[j]].restart;
 			
@@ -363,14 +365,14 @@ int main() {
 								cell[jindex[j]].update_integrins(dt,t,average_substrate_spore, average_substrate_stalk, restart,i,jindex[j],cell);//update integrins
 							}
 							else { //if cell is stopped
-							//do nothing; don't attach
+								//do nothing; don't attach
 							}
 						}
 					}
 				}
 			}
 		}
-	 
+		
 		//count the cadherins and integrins which need to be moved
 		for(int ii = 0; ii < ncells; ii++) {
 			for(int jj = 0; jj < ncad; jj++) { 
@@ -386,12 +388,12 @@ int main() {
 				}
 			}    
 		}
-
+		
 		if((number_cadherins_update+number_integrins_update) != 0) {
 			update_cadherin_cell_center_location(cvode_mem, number_cadherins_update,cadherins_update, number_integrins_update,integrins_update,dt,cell);// THIS MOVES THE CENTERS AND THE NODES
 		}
 		localize_node_grid_update_all(cell);
-
+		
 		// output data 
 		if(it%20 == 0) {  
 			foutf << dt*it << "\n";
@@ -408,7 +410,7 @@ int main() {
 		}
 		foutr << it*dt << " " << cadattach << " " << intattach << "\n";
 	}// end to time loop
-
+	
 	cout << cad_averand/cad_numang << "\n";
 	cout << cad_avedir[0]/cad_numang << "  " << cad_avedir[1]/cad_numang << "\n";
 	for(int ii = 0; ii < 9; ii++) {
@@ -417,7 +419,7 @@ int main() {
 	cout << "\n";
 	cout << int_averand/int_numang << "\n";
 	cout << int_avedir[0]/int_numang << "  " << int_avedir[1]/int_numang << "\n";
-
+	
 	int totx = 0;
 	for(int i = 0; i < ncells; i++) {
 		double value[1];
@@ -425,13 +427,13 @@ int main() {
 		totx += value[0];
 	}
 	foutm << 1.0*totx/ncells << "\n";
-
+	
 	foutc.close();
 	foutf.close();
 	foutr.close();
 	foutcf.close();
 	foutm.close();
-
+	
 	CVodeFree(&cvode_mem);
 	return 0;
 }
@@ -439,13 +441,13 @@ int main() {
 // end of main
 
 /*************************************************************************************
-                            auxillary function definitions
-*************************************************************************************/
+ auxillary function definitions
+ *************************************************************************************/
 
 
 
 /************************************** move_the_cell ********************************
-*************************************************************************************/
+ *************************************************************************************/
 
 void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int cadherins_update[], int nintegrins, int integrins_update[], double dt,Cell *cell) {
 	N_Vector cc;
@@ -460,12 +462,12 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
 	int nnnmax = 2*(ncells+ncadherins);
 	double tmpx[ncells*(ncad+1)*dim]; // holds the location of the cell center and cadherins
 	double su[ncells*(ncad+1)*dim]; // scaling arra
-
+	
 	for(int m = 0; m <= ncells*(ncad+1)*dim-1; m++) {
 		su[m] = 1.0;
 		tmpx[m] = 0.0;
 	}
-
+	
 	//    load in the cell center locations and ncadherin
 	for( int i = 0; i < ncells; i++) {
 		int ii = dim*i;
@@ -488,7 +490,7 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
 		tmpx[ii+1] = vector[1];	//the y coordinate
 	}
     cc = N_VMake_Serial((ncells+totalcad)*dim,tmpx);
-
+	
 	flag = CVodeReInit(cvode_mem, tstart, cc);   
 	if(check_flag(&flag, "CVodeReInit", 1)) {
 		return;
@@ -503,30 +505,30 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
 	if(check_flag(&flag, "CVodeSStolerances", 1)) {
 		return;
 	}
-
+	
 	const int mmax = 15;      //dimension of krylov space
-
+	
 	flag = CVSpgmr(cvode_mem, PREC_NONE, mmax);
 	if(check_flag(&flag, "CVSpgmr", 1)) {
 		return;
 	}
 	double tret;
 	tend = tstart + dt;
-
+	
 	flag = CVode(cvode_mem, tend,cc,&tret,CV_NORMAL);
-  
+	
 	/* Call KINSol and print output concentration profile */
 	if ( check_flag ( &flag , "CVode", 1)) {
 		return;
 	}
-
+	
 	for(int i = 0; i < ncells*dim + nn; i++) {
 		tmpx[i] = NV_Ith_S(cc,i);
 	}
 	
 	// Free memory
 	N_VDestroy_Serial(cc);
-
+	
 	// Update the cell locations
 	for(int i = 0; i < ncells; i++) {
 		int ii = dim*(i);
@@ -556,13 +558,13 @@ void update_cadherin_cell_center_location(void *cvode_mem, int ncadherins, int c
 
 
 /************************************************************************************
-                                  Initialize cells
-************************************************************************************/
+ Initialize cells
+ ************************************************************************************/
 
 void initialize_cells(int ncx,int ncy, Cell *cell, ofstream& fout) {
 	double dx = 5; // 10 microns apart for each cell
 	double dy = 5; // 10 microns apart for each cell
-
+	
 	int totx = 0;
 	for(int k = 0; k < ncx; k++) {
 		for(int j = 0; j < ncy; j++) {
@@ -619,9 +621,9 @@ void initialize_cells(int ncx,int ncy, Cell *cell, ofstream& fout) {
 } // end initialize_cells
 
 /*************************************************************************************
-                         localize_node_grid_update_all
-           This function assigns each square grid all the cells in it. 
-*************************************************************************************/
+ localize_node_grid_update_all
+ This function assigns each square grid all the cells in it. 
+ *************************************************************************************/
 
 void localize_node_grid_update_all(Cell *cell) {
 	int l, m, i, j;
@@ -659,36 +661,36 @@ void localize_node_grid_update_all(Cell *cell) {
 		}
 		localize_node_grid[i][j][k] = icell;
 		if(k == lgrd-1) {
-		 cout << k << " lngrid is too small " << endl;
+			cout << k << " lngrid is too small " << endl;
 		}
 	} // end of icell loop
 } // end localize_node_grid_update_all()
 
 
 /*************************************************************************************
-                              Nonlinear ODEs to solve
-This function defines the RHS of the ODE system. 
-dv/dt = F_spring - drag = F_spring - v * mu
-By neglecting inertia, one get dx/dt = 1/mu * F_spring
-*************************************************************************************/
+ Nonlinear ODEs to solve
+ This function defines the RHS of the ODE system. 
+ dv/dt = F_spring - drag = F_spring - v * mu
+ By neglecting inertia, one get dx/dt = 1/mu * F_spring
+ *************************************************************************************/
 int move_nodes(double t, N_Vector cc, N_Vector fval, void *f_data) {
 	int nn = NV_LENGTH_S(cc);
-  
+	
 	double u[nn];
 	double savf[nn];
 	Cell *cell;
-  
+	
 	for(int i = 0; i < nn; i++) { // initialize the arrays since we only use part of them
 		u[i]=0;
 		savf[i]=0;
 	}
-
+	
 	cell = (Cell*)f_data;
-
+	
 	for(int i = 0; i < nn; i++) {
 		u[i]=NV_Ith_S(cc,i);
 	}
-
+	
 	function_node(u, savf, nn, cell);
 	// Save the forces on each cell to global variable. Ideally, we'd only do the last time of the iterative solver.
 	for(int i = 0; i < 2*cx*cy; i++) {
@@ -732,9 +734,9 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
 			} // endif not same cell
 		} // end for loop; j through jcells
 	} // end for loop; i through ncells
-
+	
 	// Do the integrin forces
-	int ntmpint = cell[0].get_nintegrin(2);
+	int ntmpint = cell[0].get_nintegrin();
 	for(int i = 0; i < ntmpint; i += dim) {
 		int itmp = integrins_update[(i)/2]; 
 		int inode = itmp%nint;
@@ -755,15 +757,15 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
 		}
 		int type = cell[icell].get_type();
 		double tmptype = int_spring_factor[type];
-
+		
 		double tmpfx = cell[icell].get_integrin_kspring(inode)*stretch*tmpx*tmplength*tmptype; // hookes law
 		double tmpfy = cell[icell].get_integrin_kspring(inode)*stretch*tmpy*tmplength*tmptype; // hookes law
-
+		
 		savf[2*(icell)] = savf[dim*(icell)] + mur*tmpfx;
 		savf[2*(icell)+1] = savf[dim*(icell)+1] + mur*tmpfy;
 	} //end integrin forces
 	// Do the cadherin forces
-	int ntmp = cell[0].get_ncadherin(2); // gets cell's general cadherin # 
+	int ntmp = cell[0].get_ncadherin(); // gets cell's general cadherin # 
 	for(int i = dim*ncells; i < ntmp + dim*ncells; i += dim) { // dim = 2
 		int itmp = cadherins_update[(i-dim*ncells)/2]; // identifies cadherin to be updated ???
 		int inode = itmp%ncad; // local cadherin #
@@ -788,17 +790,17 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
 		if(icelltype != aicelltype) {
 			tmptype = 1;
 		}
-
+		
 		double tmpfx = cell[icell].get_cadherin_kspring(inode, tmptype)*stretch*tmpx*tmplength; // hookes law
 		double tmpfy = cell[icell].get_cadherin_kspring(inode, tmptype)*stretch*tmpy*tmplength; // hookes law
-
+		
 		savf[2*(icell)] = savf[dim*(icell)] + mur*tmpfx;
 		savf[2*(icell)+1] = savf[dim*(icell)+1] + mur*tmpfy;
 		
 		//move cadherins
 		savf[i] = savf[i] - mur*tmpfx/cadviscosityfactor;
 		savf[i+1] = savf[i+1] - mur*tmpfy/cadviscosityfactor;
-
+		
 		// add spring constant terms
 		tmpx = u[i] - u[dim*aicell];
 		tmpy = u[i+1] - u[dim*aicell + 1];
@@ -813,7 +815,7 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
 		}
 		tmpfx = cell[aicell].get_cadherin_kspring(ainode, tmptype)*stretch*tmpx*tmplength; // hookes law
 		tmpfy = cell[aicell].get_cadherin_kspring(ainode, tmptype)*stretch*tmpy*tmplength; // hookes law
-	  
+		
 		savf[i] = savf[i] - mur*tmpfx/cadviscosityfactor;
 		savf[i+1] = savf[i+1] - mur*tmpfy/cadviscosityfactor;
 		// add to the cell center
@@ -822,7 +824,7 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
 	} // end cadherin forces	
 	return;
 } // end function_node()
-   
+
 
 /*
  * Check function return value ...
@@ -833,9 +835,9 @@ void function_node(double u[], double savf[], int nn, Cell *cell) {
  * opt == 2 means function allocates memory so check if returned
  * NULL pointer
  */
- int check_flag(void* flagvalue, char* funcname, int opt) {
+int check_flag(void* flagvalue, char* funcname, int opt) {
 	int* errflag;
-
+	
 	/* Check if SUNDIALS function returned NULL pointer - no memory allocated */
 	if(opt == 0 && flagvalue == NULL) {
 		fprintf(stderr, "\n SUNDIALS_ERROR : %s()  failed  -  returned   NULL   pointer \n\n", funcname);
