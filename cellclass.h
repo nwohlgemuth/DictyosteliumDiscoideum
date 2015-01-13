@@ -1,6 +1,6 @@
 /* 
-	Cell Class header
-*/
+ Cell Class header
+ */
 
 #ifndef _CELL_H_
 #define _CELL_H_
@@ -48,7 +48,7 @@ private:
 	int ncadherin; 			// a variable the same for all cells which is used in move_nodes
 	int nintegrin; 			// number of integrins attached to substrate
 	int celltype; 			// 0 is spore cell, 1 is stalk 
-
+	
 	void calculate_cadherin_length(int cadherin_index); 
 	void calculate_cadherin_force(int cadherin_index);    
 	void calculate_cadherin_vector(int cadherin_index);
@@ -58,61 +58,61 @@ private:
 	void calculate_integrin_force(int integrin_index);    
 	void calculate_integrin_vector(int integrin_index);    
 	void calculate_integrin_front_indicator(int integrin_index);
-
+	
 	void update_cadherin_attachment(int cadherin_index, double dt);
 	void update_cadherin_attachment_new(int cadherin_index, double dt,double t, double average_spore,double average_stalk[], double average_different, int restart, double average_unbound_cad_spore, double average_unbound_cad_stalk,int cell_index, Cell *cell);
 	void update_cadherin_attachment_initial(int cadherin_index, double dt,double average_spore,double average_stalk[], double average_different,int restart, double average_unbound_cad_spore, double average_unbound_cad_stalk,int cell_index, Cell *cell);
-
+	
 	void update_integrin_attachment(int integrin_index, double dt);
 	void update_integrin_attachment_new(int integrin_index, double dt,double t, double average_substrate_spore,double average_substrate_stalk[], int restart,int cell_index, Cell *cell);
 	void update_integrin_attachment_initial(int integrin_index, double dt,double average_substrate_spore,double average_substrate_stalk[],int restart, double average_unbound_int_spore, double average_unbound_int_stalk,int cell_index, Cell *cell);
-
- public:
+	
+public:
 	void initialize( double xc, double yc, Cadherin init_cad[], Integrin init_int[], double frontx, double fronty, int celltype);
 	Cell(double x, double y, Cadherin initial_cad[],Integrin init_int[], double front1, double front2, int celltype1);
 	Cell();
 	~Cell();
 	int restart; // FIX THIS ~GLOBAL VARIABLE
-
+	
 	void get_center(double value[], int lim);
 	void get_front(double value[], int lim);
-
+	
 	double get_cadherin_length(int cadherin_index);
-	double get_cadherin_force(int cadherin_index);
-	double get_cadherin_kspring(int cadherin_index, int tmptype);
-	double get_cadherin_mu(int cadherin_index);
-	int get_ncadherin();
-	int get_cadherin_attach(int cadherin_index);
-	double get_cadherin_time(int cadherin_index);
+	double get_cadherin_force(int cadherin_index) const;
+	double get_cadherin_kspring(int cadherin_index, int tmptype) const;
+	double get_cadherin_mu(int cadherin_index) const;
+	int get_ncadherin() const;
+	int get_cadherin_attach(int cadherin_index) const;
+	double get_cadherin_time(int cadherin_index) const;
 	void get_cadherin_location(int cadherin_index, double value[], int lim);
 	void get_cadherin_vector(int cadherin_index, double value[], int lim);
 	int get_cadherin_front_indicator(int cadherin_index);
-	double get_integrin_length(int integrin_index);
-	double get_integrin_force(int integrin_index);
-	double get_integrin_kspring(int integrin_index);
-	double get_integrin_mu(int integrin_index);
-	int get_nintegrin();
-	int get_integrin_attach(int integrin_index);
-	double get_integrin_time(int integrin_index);
+	double get_integrin_length(const int integrin_index) const;
+	double get_integrin_force(int integrin_index) const;
+	double get_integrin_kspring(int integrin_index) const;
+	double get_integrin_mu(int integrin_index) const;
+	int get_nintegrin() const;
+	int get_integrin_attach(int integrin_index) const;
+	double get_integrin_time(int integrin_index) const;
 	void get_integrin_location(int integrin_index, double value[], int lim);
 	void get_integrin_vector(int integrin_index, double value[], int lim);
-	int get_integrin_front_indicator(int integrin_index);
-	int get_type(int type);
-
+	int get_integrin_front_indicator(int integrin_index) const;
+	int get_type() const;
+	
 	void set_center(double value[], int lim);
 	void set_front(double value[], int lim);
 	void set_type(int value);
-
+	
 	void set_cadherin_attach(int cadherin_index, int value);
 	void set_cadherin_time(int cadherin_index, double value);
 	void set_ncadherin(int value);
 	void set_cadherin_location(int cadherin_index, double value[], int lim);
-
+	
 	void set_integrin_attach(int integrin_index, int value);
 	void set_integrin_time(int integrin_index, double value);
 	void set_nintegrin(int value);
 	void set_integrin_location(int integrin_index, double value[], int lim);
-
+	
 	void move_center(double dt);
 	void print_output(ofstream& fout, int n, double dt);
 	void print_output_force(ofstream& fout,int n, double dt);
